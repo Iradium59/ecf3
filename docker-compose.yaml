@@ -18,6 +18,7 @@ services:
       - app-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
       timeout: 5s
       retries: 10
 
@@ -32,10 +33,6 @@ services:
       - redis_data:/data
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      timeout: 5s
-      retries: 10
 
   # Service d'authentification
   authentication-service:
@@ -43,8 +40,9 @@ services:
       context: ./server/authentication-service
       dockerfile: Dockerfile
     container_name: authentication-service
+    restart: on-failure
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
       SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
@@ -52,7 +50,8 @@ services:
     ports:
       - "${AUTHENTICATION_SERVICE_PORT}:${AUTHENTICATION_SERVICE_PORT}"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -62,8 +61,9 @@ services:
       context: ./server/common-data-service
       dockerfile: Dockerfile
     container_name: common-data-service
+    restart: on-failure
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
       SPRING_REDIS_HOST: redis
@@ -73,12 +73,15 @@ services:
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
+      ACTIVE_PROFILE: dev
       SERVER_PORT: ${COMMON_DATA_SERVICE_PORT}
     ports:
       - "${COMMON_DATA_SERVICE_PORT}:${COMMON_DATA_SERVICE_PORT}"
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - app-network
 
@@ -96,29 +99,6 @@ services:
     networks:
       - app-network
 
-  # Service de suggestions de recherche (à développer)
-  # search-suggestion-service:
-  #   build:
-  #     context: ./server/search-suggestion-service
-  #     dockerfile: Dockerfile
-  #   container_name: search-suggestion-service
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true
-  #     SPRING_DATASOURCE_USERNAME: ${DB_USER}
-  #     SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
-  #     SPRING_REDIS_HOST: redis
-  #     SPRING_REDIS_PORT: ${REDIS_PORT}
-  #     SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-  #     SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
-  #     SERVER_PORT: ${SEARCH_SUGGESTION_SERVICE_PORT}
-  #   ports:
-  #     - "${SEARCH_SUGGESTION_SERVICE_PORT}:${SEARCH_SUGGESTION_SERVICE_PORT}"
-  #   depends_on:
-  #     - mysql
-  #     - redis
-  #   networks:
-  #     - app-network
-
   # Frontend React
   client:
     build:
@@ -128,17 +108,15 @@ services:
     environment:
       - PORT=${REACT_APP_PORT}
       - REACT_APP_ENVIRONMENT=${REACT_APP_ENVIRONMENT}
-      - REACT_APP_AUTH_API_URL=http://authentication-service:${AUTHENTICATION_SERVICE_PORT}
-      - REACT_APP_COMMON_API_URL=http://common-data-service:${COMMON_DATA_SERVICE_PORT}
-      - REACT_APP_PAYMENT_API_URL=http://payment-service:${PAYMENT_SERVICE_PORT}
-      - REACT_APP_SEARCH_API_URL=http://search-suggestion-service:${SEARCH_SUGGESTION_SERVICE_PORT}
+      - REACT_APP_AUTH_API_URL=http://localhost:${AUTHENTICATION_SERVICE_PORT}
+      - REACT_APP_COMMON_API_URL=http://localhost:${COMMON_DATA_SERVICE_PORT}
+      - REACT_APP_PAYMENT_API_URL=http://localhost:${PAYMENT_SERVICE_PORT}
     ports:
       - "${REACT_APP_PORT}:${REACT_APP_PORT}"
     depends_on:
       - authentication-service
       - common-data-service
       - payment-service
-      # - search-suggestion-service
     networks:
       - app-network
 
