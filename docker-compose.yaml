@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # Base de données MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${DB_PORT}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+
+  # Redis pour le cache
+  redis:
+    image: redis:6.0
+    container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 10
+
+  # Service d'authentification
+  authentication-service:
+    build:
+      context: ./server/authentication-service
+      dockerfile: Dockerfile
+    container_name: authentication-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
+      SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
+      SERVER_PORT: ${AUTHENTICATION_SERVICE_PORT}
+    ports:
+      - "${AUTHENTICATION_SERVICE_PORT}:${AUTHENTICATION_SERVICE_PORT}"
+    depends_on:
+      - mysql
+    networks:
+      - app-network
+
+  # Service de données communes
+  common-data-service:
+    build:
+      context: ./server/common-data-service
+      dockerfile: Dockerfile
+    container_name: common-data-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: ${REDIS_PORT}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
+      SERVER_PORT: ${COMMON_DATA_SERVICE_PORT}
+    ports:
+      - "${COMMON_DATA_SERVICE_PORT}:${COMMON_DATA_SERVICE_PORT}"
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - app-network
+
+  # Service de paiement
+  payment-service:
+    build:
+      context: ./server/payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
+      SERVER_PORT: ${PAYMENT_SERVICE_PORT}
+    ports:
+      - "${PAYMENT_SERVICE_PORT}:${PAYMENT_SERVICE_PORT}"
+    networks:
+      - app-network
+
+  # Service de suggestions de recherche (à développer)
+  # search-suggestion-service:
+  #   build:
+  #     context: ./server/search-suggestion-service
+  #     dockerfile: Dockerfile
+  #   container_name: search-suggestion-service
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_SCHEMA}?useSSL=false&allowPublicKeyRetrieval=true
+  #     SPRING_DATASOURCE_USERNAME: ${DB_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
+  #     SPRING_REDIS_HOST: redis
+  #     SPRING_REDIS_PORT: ${REDIS_PORT}
+  #     SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+  #     SPRING_PROFILES_ACTIVE: ${ACTIVE_PROFILE}
+  #     SERVER_PORT: ${SEARCH_SUGGESTION_SERVICE_PORT}
+  #   ports:
+  #     - "${SEARCH_SUGGESTION_SERVICE_PORT}:${SEARCH_SUGGESTION_SERVICE_PORT}"
+  #   depends_on:
+  #     - mysql
+  #     - redis
+  #   networks:
+  #     - app-network
+
+  # Frontend React
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: client
+    environment:
+      - PORT=${REACT_APP_PORT}
+      - REACT_APP_ENVIRONMENT=${REACT_APP_ENVIRONMENT}
+      - REACT_APP_AUTH_API_URL=http://authentication-service:${AUTHENTICATION_SERVICE_PORT}
+      - REACT_APP_COMMON_API_URL=http://common-data-service:${COMMON_DATA_SERVICE_PORT}
+      - REACT_APP_PAYMENT_API_URL=http://payment-service:${PAYMENT_SERVICE_PORT}
+      - REACT_APP_SEARCH_API_URL=http://search-suggestion-service:${SEARCH_SUGGESTION_SERVICE_PORT}
+    ports:
+      - "${REACT_APP_PORT}:${REACT_APP_PORT}"
+    depends_on:
+      - authentication-service
+      - common-data-service
+      - payment-service
+      # - search-suggestion-service
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
