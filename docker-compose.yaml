@@ -98,6 +98,19 @@ services:
       - "${PAYMENT_SERVICE_PORT}:${PAYMENT_SERVICE_PORT}"
     networks:
       - app-network
+      
+  # Service de suggestions de recherche
+  search-suggestion-service:
+    build:
+      context: ./server/search-service
+      dockerfile: Dockerfile
+    container_name: search-suggestion-service
+    environment:
+      PORT: ${SEARCH_SUGGESTION_SERVICE_PORT}
+    ports:
+      - "${SEARCH_SUGGESTION_SERVICE_PORT}:${SEARCH_SUGGESTION_SERVICE_PORT}"
+    networks:
+      - app-network
 
   # Frontend React
   client:
@@ -111,12 +124,14 @@ services:
       - REACT_APP_AUTH_API_URL=http://localhost:${AUTHENTICATION_SERVICE_PORT}
       - REACT_APP_COMMON_API_URL=http://localhost:${COMMON_DATA_SERVICE_PORT}
       - REACT_APP_PAYMENT_API_URL=http://localhost:${PAYMENT_SERVICE_PORT}
+      - REACT_APP_SEARCH_SUGGESTION_SERVICE_URL=http://localhost:${SEARCH_SUGGESTION_SERVICE_PORT}
     ports:
       - "${REACT_APP_PORT}:${REACT_APP_PORT}"
     depends_on:
       - authentication-service
       - common-data-service
       - payment-service
+      - search-suggestion-service
     networks:
       - app-network
 
