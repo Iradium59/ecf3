@@ -107,10 +107,13 @@ services:
     container_name: search-suggestion-service
     environment:
       PORT: ${SEARCH_SUGGESTION_SERVICE_PORT}
+      COMMON_DATA_SERVICE_URL: ${COMMON_DATA_SERVICE_URL}
     ports:
       - "${SEARCH_SUGGESTION_SERVICE_PORT}:${SEARCH_SUGGESTION_SERVICE_PORT}"
     networks:
       - app-network
+    depends_on:
+      - common-data-service
 
   # Frontend React
   client:
