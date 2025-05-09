@@ -1,0 +1,75 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  trivy-scan:
+    name: Trivy Vulnerability Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build images
+        run: |
+          docker-compose build
+
+      - name: Run Trivy vulnerability scanner on all images
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Scan common-data-service image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'common-data-service:latest'
+          format: 'sarif'
+          output: 'trivy-results-common-data.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Scan authentication-service image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'authentication-service:latest'
+          format: 'sarif'
+          output: 'trivy-results-auth.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Scan payment-service image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'payment-service:latest'
+          format: 'sarif'
+          output: 'trivy-results-payment.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Scan search-suggestion-service image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'search-suggestion-service:latest'
+          format: 'sarif'
+          output: 'trivy-results-search.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Scan client image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'client:latest'
+          format: 'sarif'
+          output: 'trivy-results-client.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results-*.sarif'
